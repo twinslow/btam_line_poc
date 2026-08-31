@@ -9,6 +9,9 @@ hand-built channel programs and once with BTAM.
 Plus a Python partner for each line that speaks the other end of the
 conversation and traces every byte in hex.
 
+All code written by Claude, Opus 5 -- I've got no knowledge of BTAM
+or EXCP programming.
+
 ## The programs
 
 | Source | Line | Access method | Status |
