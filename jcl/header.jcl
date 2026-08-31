@@ -1,0 +1,16 @@
+//BSCPOC   JOB (POC),'BSC LINE POC',CLASS=A,MSGCLASS=A,
+//             MSGLEVEL=(1,1),REGION=1024K
+//*
+//* ------------------------------------------------------------------
+//*  ASSEMBLE, LINK-EDIT AND RUN THE BSC LINE PROOF OF CONCEPT.
+//*
+//*  THE GO STEP SITS IN THE ENABLE CCW UNTIL SOMETHING CONNECTS TO
+//*  THE HERCULES SOCKET FOR THE LINE, SO START THE PARTNER
+//*  (tools/bscpartner.py) BEFORE OR JUST AFTER SUBMITTING THIS JOB.
+//*
+//*  UNIT=090 ON THE GO.BSCLINE DD CARD IS THE VERIFIED ADDRESS.
+//*  CHANGE IT IF YOUR 2703 BSC LINE IS GENNED ELSEWHERE.
+//* ------------------------------------------------------------------
+//ASM      EXEC ASMFCLG,PARM.ASM='NODECK,LOAD',
+//             PARM.LKED='LIST,MAP,LET'
+//ASM.SYSIN DD *

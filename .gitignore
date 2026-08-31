@@ -1,0 +1,7 @@
+# Local state written by the MVS upload helper - not useful to anyone else
+.mvs_upload_ftp.log
+.mvs_upload_lastrun
+
+# Python
+__pycache__/
+*.py[cod]

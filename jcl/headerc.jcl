@@ -1,0 +1,20 @@
+//ASYPOCB  JOB (POC),'ASYNC TTY POC - BTAM',CLASS=A,MSGCLASS=X,
+//             MSGLEVEL=(1,1),REGION=1024K
+//*
+//* ------------------------------------------------------------------
+//*  ASSEMBLE, LINK-EDIT AND RUN THE BTAM VERSION OF THE TTY POC.
+//*
+//*  ASSEMBLE IT FIRST AND READ THE DIAGNOSTICS.  TWO OPERANDS ARE
+//*  STILL ASSUMPTIONS - DEVD=TT ON THE DCB AND THE OP TYPE TI ON THE
+//*  READ AND WRITE.  SUBMIT JCL/BTAMTTY.JCL TO SETTLE BOTH.
+//*
+//*  PARM.GO='Y'  THIS PROGRAM TRANSLATES (BIT REVERSED ASCII)
+//*  PARM.GO='N'  PASS THE BYTES THROUGH UNTOUCHED
+//*
+//*  CONNECT WITH telnet OR tools/ttypartner.py AND TYPE.  IT ENDS ON
+//*  'BYE' OR AFTER 10 LINES.
+//* ------------------------------------------------------------------
+//ASM      EXEC ASMFCLG,PARM.ASM='NODECK,LOAD',
+//             PARM.LKED='LIST,MAP,LET',
+//             PARM.GO='Y'
+//ASM.SYSIN DD *

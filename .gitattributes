@@ -1,0 +1,4 @@
+# Keep LF in the repository and on checkout.  The assembler sources and JCL
+# decks are column-sensitive and end up going to MVS; consistent line endings
+# avoid surprises when they are cloned on a different platform.
+* text=auto eol=lf

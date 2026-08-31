@@ -1,0 +1,21 @@
+//ASYPOC   JOB (POC),'ASYNC TTY POC',CLASS=A,MSGCLASS=X,
+//             MSGLEVEL=(1,1),REGION=1024K
+//*
+//* ------------------------------------------------------------------
+//*  ASSEMBLE, LINK-EDIT AND RUN THE ASYNC TTY PROOF OF CONCEPT.
+//*
+//*  PARM.GO='Y'  THIS PROGRAM TRANSLATES EBCDIC <-> ASCII (DEFAULT)
+//*  PARM.GO='N'  THE EMULATOR IS ASSUMED TO TRANSLATE
+//*
+//*  RUN IT ONCE WITH 'Y' AND LOOK AT THE ASYPOC 900 RAW= HEX DUMP.
+//*  A TYPED 'A' SHOWING 41 MEANS THE LINE GIVES US ASCII AND 'Y' IS
+//*  CORRECT.  C1 MEANS IT IS ALREADY EBCDIC - USE 'N'.
+//*
+//*  THE GO STEP WAITS AT THE ENABLE UNTIL SOMETHING CONNECTS, THEN
+//*  PROMPTS.  CONNECT WITH telnet OR tools/ttypartner.py AND TYPE.
+//*  IT ENDS ON 'BYE' OR AFTER 10 LINES.
+//* ------------------------------------------------------------------
+//ASM      EXEC ASMFCLG,PARM.ASM='NODECK,LOAD',
+//             PARM.LKED='LIST,MAP,LET',
+//             PARM.GO='Y'
+//ASM.SYSIN DD *
