@@ -330,69 +330,53 @@ are legitimately short.
 emits `ORG *+20` rather than the direct-access interface an invalid value
 gets. It is also distinct from `WT`, which uses a 16-byte adapter section.
 
-### The X'13' is unconditional — BTAM cannot open a commadpt line
+### `BSCPOCB` works — BTAM is fine on this system
 
-Removing `DEVD` did **not** change the OPEN sequence. BTAM issues the same
-two-CCW chain regardless:
+A full run against the BSC line at 0090 completed in both directions. That
+retires three of the four things that were assumptions when it was written:
 
-```
-ccw 2F000000 60400001    DISABLE, command-chained
-ccw 13000000 20400001    X'13'  -> stat 0E00, sense 80 = CMDREJ
-```
+| Was assumed | Result |
+| --- | --- |
+| `WRITE TI` performs the whole bid | **confirmed** — partner saw ENQ, answered ACK0, received the block, answered ACK1, all from that one macro |
+| the message area carries its own STX/ETX | **confirmed** — BTAM does not frame the block; partner saw exactly one STX |
+| the `OPENLST` entry is a placeholder | **confirmed** — never transmitted; no X'0000' ahead of the ENQ |
+| where BTAM posts the received length | still unknown, and not needed — the program scans for ETX |
 
-So X'13' is part of BTAM's line-group conditioning for `DSORG=CX` in
-general, not something `WT` asked for. commadpt logs `CCW exec - entry
-code 13` and falls through to its default, which sets command reject.
+`WRITE TR` sends the EOT, `READ TI` takes the partner's bid and block with
+BTAM answering ACK0 and ACK1 by itself, and `READ TT` picks up their EOT.
 
-OPEN still completes and sets `DCBOFLGS`, so the program reports the line
-open — but no channel program is ever started for the first `WRITE`. The
-ECB is never posted and `TWAIT` waits forever. Nothing about the message
-data (line endings, translation, op type) is reachable from here; the
-failure is upstream of any data transfer.
+### `ASYPOCB` still does not work, and the cause is not established
 
-**This predicts `BSCPOCB` fails identically on the BSC line**, since the
-OPEN path is the same. Untested, and the cleanest way to confirm that the
-problem is BTAM-versus-commadpt rather than anything async-specific.
+The async program opens the line and then never starts I/O on the first
+`WRITE`. What is seen at OPEN is a Disable chained to X'13', which commadpt
+command-rejects — X'13' being one of the 2702-compatibility commands a real
+2703 accepts as an I/O No-Op.
 
-### What X'13' is — and why this is a Hercules bug
+**But `BSCPOCB` working undermines the obvious conclusion.** An earlier note
+here claimed BTAM could not open *any* commadpt line; that was wrong. If
+BSC OPEN issues the same X'13' and survives it, the rejection is incidental
+and the async failure has another cause.
 
-From the 2703 component description: X'13' is one of a group of **standard
-2702 commands that the 2703 accepts and treats as an I/O No-Op**, present
-only so that channel programs written for a 2702 keep working. On the 2702
-a SAD command selects the line adapter; a 2703 has no use for it and
-swallows it.
+The test that separates those: run `BSCPOCB` with the Hercules CCW trace on
+and look at its OPEN sequence.
 
-BTAM issues one at OPEN because it supports both controllers. Real
-hardware would accept and ignore it. commadpt has no case for it, falls to
-its default, and answers command reject — so BTAM concludes the line
-cannot be conditioned and never starts I/O.
+- If BSC OPEN has no X'13', the command is specific to non-BSC line types
+  and patching commadpt to no-op it is the fix.
+- If BSC OPEN has X'13' and works anyway, look instead at the op type
+  (`TI` versus `TP` or `TS`) and at the missing control-character table.
 
-That makes this an emulation gap rather than a BTAM or program problem:
-commadpt rejects a command the device it emulates is documented to accept.
+### The DCB may be the deeper problem
 
-### The fix
+No `DEVD` value describes an ordinary remote start-stop line. The three
+available are `BS`, `WT` and `LD`, and only `BS` generates the 26-byte
+control-character table — which holds the *BSC* characters. It is possible
+this BTAM was genned without start-stop terminal support, in which case no
+amount of macro coding will help and `ASYPOC` on EXCP is the answer for
+that line.
 
-Add the 2702-compatibility commands to commadpt's CCW dispatch as no-ops,
-mirroring whatever the existing X'03' NOP case sets for `unitstat` and
-`residual`. Cover the whole documented group, not only X'13' — BTAM
-issues that one at OPEN, but others in the family may appear elsewhere in
-the line handling and would fail identically.
+### Working state
 
-This is worth reporting upstream to SDL Hyperion; the manual's wording is
-explicit that these are accepted commands.
-
-### Line endings are not the problem
-
-CR+LF outbound and `eol=0D iskip=0A` inbound are proven correct on this
-line by `ASYPOC`, which drives it successfully with exactly that pairing.
-
-### Still open
-
-- **Whether `TI` is the right op type for start-stop**, or whether it
-  wants `TP` or `TS`. All are valid mnemonics; only running will say.
-  Remember an unrecognised mnemonic assembles silently as type 0.
-- **Where BTAM posts the received length** — narrowed to the response
-  field at DECB+26 and the CSW status at DECB+30. `ASYPOCB` dumps the
-  whole 40-byte DECB after each read.
-- The BSC semantics questions above (`WRITE TI` doing the bid, STX/ETX
-  framing) remain untested.
+| Line | EXCP | BTAM |
+| --- | --- | --- |
+| BSC 0090 | `BSCPOC` — works | `BSCPOCB` — works |
+| async 0684 | `ASYPOC` — works | `ASYPOCB` — does not work |

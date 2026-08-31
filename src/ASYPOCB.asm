@@ -1,26 +1,32 @@
 *---------------------------------------------------------------------*
-*   S T A T U S  -  THIS PROGRAM CANNOT RUN AS THINGS STAND           *
+*   S T A T U S  -  THIS PROGRAM DOES NOT WORK YET                    *
 *                                                                     *
-*   BTAM CANNOT OPEN A HERCULES commadpt LINE.  ITS OPEN FOR A        *
-*   DSORG=CX LINE GROUP ISSUES  DISABLE (X'2F')  CHAINED TO  X'13' ,  *
-*   AND commadpt HAS NO CASE FOR X'13' SO IT ANSWERS COMMAND REJECT.  *
+*   IT ASSEMBLES CLEAN AND OPENS THE LINE , BUT THE FIRST WRITE NEVER *
+*   STARTS ANY I/O - NO CHANNEL PROGRAM APPEARS IN THE HERCULES       *
+*   TRACE , THE ECB IS NEVER POSTED , AND TWAIT WAITS FOREVER.        *
 *                                                                     *
-*   X'13' IS ONE OF THE STANDARD 2702 COMMANDS THAT A REAL 2703       *
-*   ACCEPTS AND TREATS AS AN I/O NO-OP , PRESENT ONLY FOR 2702        *
-*   PROGRAMMING COMPATIBILITY.  SO THIS IS AN EMULATION GAP , NOT A   *
-*   FAULT IN THIS PROGRAM OR IN BTAM.                                 *
+*   NOTE THAT BTAM ITSELF IS FINE ON THIS SYSTEM - THE COMPANION      *
+*   PROGRAM BSCPOCB DRIVES THE BSC LINE AT 0090 CORRECTLY.  SO THIS   *
+*   IS SOMETHING ABOUT THE START STOP LINE , NOT ABOUT BTAM OR ABOUT  *
+*   THE MACRO CODING IN HERE.                                         *
 *                                                                     *
-*   OPEN STILL COMPLETES AND THE PROGRAM REPORTS THE LINE OPEN , BUT  *
-*   NO CHANNEL PROGRAM IS EVER STARTED FOR THE FIRST WRITE , THE ECB  *
-*   IS NEVER POSTED , AND TWAIT WAITS FOREVER.                        *
+*   WHAT IS SEEN : OPEN ISSUES DISABLE (X'2F') CHAINED TO X'13' AND   *
+*   HERCULES commadpt COMMAND REJECTS THE X'13'.  A REAL 2703 ACCEPTS *
+*   THAT COMMAND AND TREATS IT AS AN I/O NO-OP - IT IS ONE OF THE     *
+*   2702 COMPATIBILITY COMMANDS.  BUT IT IS NOT PROVEN THAT THIS IS   *
+*   THE CAUSE , BECAUSE BSCPOCB MAY WELL ISSUE THE SAME X'13' AND     *
+*   SURVIVE IT.  RUNNING BSCPOCB WITH THE CCW TRACE ON WOULD SETTLE   *
+*   IT.                                                               *
 *                                                                     *
-*   FIX : ADD THE 2702 COMPATIBILITY COMMANDS TO commadpt's CCW       *
-*   DISPATCH AS NO-OPS , MIRRORING THE EXISTING X'03' NOP CASE.       *
-*   NOT DONE - NO HERCULES BUILD ENVIRONMENT AVAILABLE.               *
+*   OTHER CANDIDATES , NOT YET ELIMINATED :                           *
+*     - OP TYPE TI MAY BE WRONG FOR START STOP.  TP AND TS ARE ALSO   *
+*       VALID MNEMONICS.  SEE DOCS/BTAM-NOTES.MD FOR THE FULL SET.    *
+*     - NO DEVD VALUE DESCRIBES AN ORDINARY START STOP LINE , SO THE  *
+*       DCB CARRIES NO CONTROL CHARACTER TABLE.  ONLY DEVD=BS         *
+*       GENERATES ONE , AND THAT IS THE BSC SET.                      *
 *                                                                     *
 *   SEE README.MD AND DOCS/BTAM-NOTES.MD.  THE MACRO SYNTAX IN HERE   *
-*   IS ALL VERIFIED AGAINST THE REAL SYSTEM ; ONLY THE LINE ITSELF    *
-*   IS UNREACHABLE.                                                   *
+*   IS ALL VERIFIED AGAINST THE REAL SYSTEM.                          *
 *---------------------------------------------------------------------*
 *---------------------------------------------------------------------*
 *                                                                     *

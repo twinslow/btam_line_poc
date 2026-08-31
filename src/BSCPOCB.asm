@@ -1,32 +1,4 @@
 *---------------------------------------------------------------------*
-*   S T A T U S  -  THIS PROGRAM CANNOT RUN AS THINGS STAND           *
-*                                                                     *
-*   BTAM CANNOT OPEN A HERCULES commadpt LINE.  ITS OPEN FOR A        *
-*   DSORG=CX LINE GROUP ISSUES  DISABLE (X'2F')  CHAINED TO  X'13' ,  *
-*   AND commadpt HAS NO CASE FOR X'13' SO IT ANSWERS COMMAND REJECT.  *
-*                                                                     *
-*   X'13' IS ONE OF THE STANDARD 2702 COMMANDS THAT A REAL 2703       *
-*   ACCEPTS AND TREATS AS AN I/O NO-OP , PRESENT ONLY FOR 2702        *
-*   PROGRAMMING COMPATIBILITY.  SO THIS IS AN EMULATION GAP , NOT A   *
-*   FAULT IN THIS PROGRAM OR IN BTAM.                                 *
-*                                                                     *
-*   OPEN STILL COMPLETES AND THE PROGRAM REPORTS THE LINE OPEN , BUT  *
-*   NO CHANNEL PROGRAM IS EVER STARTED FOR THE FIRST WRITE , THE ECB  *
-*   IS NEVER POSTED , AND TWAIT WAITS FOREVER.                        *
-*                                                                     *
-*   FIX : ADD THE 2702 COMPATIBILITY COMMANDS TO commadpt's CCW       *
-*   DISPATCH AS NO-OPS , MIRRORING THE EXISTING X'03' NOP CASE.       *
-*   NOT DONE - NO HERCULES BUILD ENVIRONMENT AVAILABLE.               *
-*                                                                     *
-*   SEE README.MD AND DOCS/BTAM-NOTES.MD.  THE MACRO SYNTAX IN HERE   *
-*   IS ALL VERIFIED AGAINST THE REAL SYSTEM ; ONLY THE LINE ITSELF    *
-*   IS UNREACHABLE.                                                   *
-*---------------------------------------------------------------------*
-*   NOTE - CONFIRMED ON THE ASYNC LINE WITH ASYPOCB.  THIS ONE HAS   *
-*   NOT BEEN RUN , BUT THE OPEN PATH IS THE SAME SO IT IS EXPECTED   *
-*   TO FAIL IDENTICALLY.                                             *
-*---------------------------------------------------------------------*
-*---------------------------------------------------------------------*
 *                                                                     *
 *   B S C P O C B  -  THE BSC PROOF OF CONCEPT , DONE WITH BTAM       *
 *                                                                     *
@@ -52,9 +24,10 @@
 *                                                                     *
 *        DECB , TYPE , DCB , AREA , LENGTH , TERMLIST , LINENO        *
 *                                                                     *
-*   FOUR THINGS IN HERE ARE STILL ASSUMPTIONS - THEY ARE MARKED       *
-*   >>> ASSUMPTION <<< WHERE THEY OCCUR.  EVERY ONE OF THEM SHOWS UP  *
-*   IN THE JOB LOG OR IN THE PARTNERS HEX TRACE IF IT IS WRONG.       *
+*   T H I S   P R O G R A M   W O R K S .  IT HAS BEEN RUN AGAINST   *
+*   THE 0090 LINE AND COMPLETED A FULL CONVERSATION IN BOTH           *
+*   DIRECTIONS.  THAT RUN ALSO CONFIRMED THREE THINGS THAT WERE       *
+*   ASSUMPTIONS WHEN IT WAS WRITTEN - SEE THE NOTES AT EACH STEP.     *
 *                                                                     *
 *   RETURN CODE  0 = OK / 8 = BTAM POSTED AN ERROR / 12 = OPEN FAILED *
 *                                                                     *
@@ -120,15 +93,12 @@ OPENOK   EQU   *
 *---------------------------------------------------------------------*
 *   STEP 1 - WRITE INITIAL.                                           *
 *                                                                     *
-*   >>> ASSUMPTION <<<  THAT WRITE TI PERFORMS THE WHOLE BID FOR US - *
-*   ENQ , WAIT FOR ACK0 , SEND THE BLOCK , CHECK THE ACK1.  IF BTAM   *
-*   ONLY BIDS AND DOES NOT SEND , THE PARTNER TRACE WILL SHOW AN ENQ  *
-*   AND NOTHING ELSE.                                                 *
+*   CONFIRMED BY A REAL RUN - WRITE TI PERFORMS THE WHOLE BID.  THE  *
+*   PARTNER SAW ENQ , ANSWERED ACK0 , THEN RECEIVED THE TEXT BLOCK    *
+*   AND ANSWERED ACK1 , ALL FROM THIS ONE MACRO.                      *
 *                                                                     *
-*   >>> ASSUMPTION <<<  THAT THE MESSAGE AREA CARRIES ITS OWN STX AND *
-*   ETX.  IF BTAM FRAMES THE BLOCK ITSELF THE PARTNER WILL SHOW TWO   *
-*   STX BYTES IN THE HEX TRACE , AND TXTAREA SHOULD THEN BE JUST      *
-*   TXTDATA.                                                          *
+*   ALSO CONFIRMED - THE MESSAGE AREA CARRIES ITS OWN STX AND ETX.    *
+*   BTAM DOES NOT FRAME THE BLOCK ; THE PARTNER SAW EXACTLY ONE STX.  *
 *---------------------------------------------------------------------*
          LA    R1,MSG030
          BAL   R14,SAY
@@ -186,9 +156,10 @@ READOK   EQU   *
 *---------------------------------------------------------------------*
 *   SHOW THE DECB IN HEX AS WELL AS THE DATA.                         *
 *                                                                     *
-*   >>> ASSUMPTION <<<  WE DO NOT YET KNOW WHERE BTAM POSTS THE       *
-*   RECEIVED LENGTH , SO THE DECB IS DUMPED TOO - COMPARE IT WITH     *
-*   THE LENGTH FIELD AT DECB+6 AND WITH WHAT THE PARTNER SENT.        *
+*   STILL OPEN - WHERE BTAM POSTS THE RECEIVED LENGTH.  THE DECB IS  *
+*   DUMPED SO IT CAN BE FOUND ; COMPARE IT WITH THE LENGTH FIELD AT   *
+*   DECB+6 AND WITH WHAT THE PARTNER SENT.  NOT NEEDED FOR THIS       *
+*   PROGRAM , WHICH SCANS FOR THE ETX INSTEAD.                        *
 *---------------------------------------------------------------------*
          LA    R1,RDECB
          BAL   R14,SHOWDECB
@@ -343,10 +314,9 @@ LINEDCB  DCB   DSORG=CX,MACRF=(R,W),DEVD=BS,DDNAME=BSCLINE,            X
 *   HEX FOLLOWED BY A PROCEDURE FLAG BYTE , THE LAST FLAG CARRYING    *
 *   X'80'.  SO THIS GENERATES X'0000' THEN X'81'.                     *
 *                                                                     *
-*   >>> ASSUMPTION <<<  ON A POINT TO POINT CONTENTION LINE THERE ARE *
-*   NO ADDRESSING CHARACTERS , SO THE ENTRY IS A PLACEHOLDER.  IF     *
-*   BTAM ACTUALLY TRANSMITS IT , THE PARTNER HEX TRACE WILL SHOW TWO  *
-*   UNEXPECTED X'00' BYTES AHEAD OF THE ENQ.                          *
+*   CONFIRMED BY A REAL RUN - ON A POINT TO POINT CONTENTION LINE    *
+*   THE ENTRY IS A PLACEHOLDER AND IS NOT TRANSMITTED.  THE PARTNER   *
+*   TRACE SHOWED THE ENQ WITH NO X'0000' AHEAD OF IT.                 *
 *---------------------------------------------------------------------*
 TRMLST   DFTRMLST OPENLST,(0000)
          SPACE 2

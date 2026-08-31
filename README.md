@@ -15,8 +15,8 @@ conversation and traces every byte in hex.
 | --- | --- | --- | --- |
 | [`src/BSCPOC.asm`](src/BSCPOC.asm) | BSC, 0090 | EXCP | **works** |
 | [`src/ASYPOC.asm`](src/ASYPOC.asm) | async TTY, 0684 | EXCP | **works** |
-| [`src/BSCPOCB.asm`](src/BSCPOCB.asm) | BSC, 0090 | BTAM | **blocked** — see below, untested |
-| [`src/ASYPOCB.asm`](src/ASYPOCB.asm) | async TTY, 0684 | BTAM | **blocked** — see below, confirmed |
+| [`src/BSCPOCB.asm`](src/BSCPOCB.asm) | BSC, 0090 | BTAM | **works** |
+| [`src/ASYPOCB.asm`](src/ASYPOCB.asm) | async TTY, 0684 | BTAM | **does not work** — see below |
 
 **`BSCPOC`** — point-to-point contention BSC with no BTAM involved. It runs
 the line discipline itself: bids for the line with ENQ, waits for ACK0,
@@ -39,53 +39,62 @@ no IOB. About a third shorter than the EXCP version.
 
 **`ASYPOCB`** — the same conversation as `ASYPOC`, via BTAM `READ`/`WRITE`.
 
-Both BTAM programs assemble clean and their macro syntax is verified against
-the real system (see [docs/btam-notes.md](docs/btam-notes.md)), but
-**neither can run** — see the next section.
+A run of `BSCPOCB` confirmed three things that were assumptions when it was
+written: `WRITE TI` performs the whole bid itself (ENQ, ACK0, block, ACK1
+— the partner saw all of it from that one macro); the message area carries
+its own STX/ETX, because BTAM does not frame the block; and the `OPENLST`
+entry is a placeholder that is never transmitted.
 
-## Why the BTAM programs do not run
+`ASYPOCB` assembles clean and opens the line, but cannot transmit — see the
+next section.
 
-BTAM cannot open *any* commadpt line, because of one missing command in the
-Hercules 2703 emulation.
+## Why `ASYPOCB` does not work
 
-BTAM's OPEN for a `DSORG=CX` line group issues a two-CCW channel program:
+It assembles clean and OPEN succeeds, but the first `WRITE` never starts any
+I/O — no channel program appears in the Hercules trace, the ECB is never
+posted, and `TWAIT` waits forever.
+
+**BTAM itself is fine on this system.** `BSCPOCB` drives the BSC line at
+0090 correctly, so this is something about the start-stop line rather than
+about BTAM or about the macro coding.
+
+What is observed: OPEN issues a two-CCW channel program and Hercules
+command-rejects the second one.
 
 ```
 ccw 2F000000 60400001    Disable, command-chained  -> stat 0C00, fine
 ccw 13000000 20400001    X'13'                     -> stat 0E00, sense 80 = CMDREJ
 ```
 
-**X'13' is one of a group of standard 2702 commands that a real 2703
-accepts and treats as an I/O No-Op**, present purely so channel programs
-written for a 2702 keep working — on a 2702 a SAD command selects the line
-adapter, and a 2703 has no use for it. BTAM issues one because it supports
-both controllers.
+X'13' is one of a group of standard 2702 commands that a real 2703 accepts
+and treats as an I/O No-Op, present so channel programs written for a 2702
+keep working. Hercules `commadpt.c` has no case for it — it logs `CCW exec
+- entry code 13`, falls through to its default and rejects the command.
 
-Hercules `commadpt.c` has no case for it. It logs `CCW exec - entry code
-13`, falls through to its default, and answers command reject. OPEN still
-completes and sets `DCBOFLGS`, so the program reports the line open — but
-BTAM concludes the line could not be conditioned and never starts any I/O.
-The first `WRITE` produces no channel activity at all, the ECB is never
-posted, and `TWAIT` waits forever.
+**This is not proven to be the cause.** `BSCPOCB` may well issue the same
+X'13' at OPEN and survive it, in which case the rejection is a red herring
+and the async failure is something else. Running `BSCPOCB` with the CCW
+trace on and comparing its OPEN sequence would settle that, and is the
+obvious next step.
 
-Nothing downstream of that is reachable: not the op type, not the message
-framing, not the line endings. The failure is before any data transfer.
+Other candidates, not yet eliminated:
 
-### The fix, not yet done
+- **The op type.** `ASYPOCB` uses `TI` on both the `READ` and the `WRITE`.
+  It is a valid mnemonic, but `TP` and `TS` also exist and start-stop may
+  want one of those. Note an unrecognised mnemonic assembles silently as
+  type 0, so any substitution needs checking against the type-code table in
+  [docs/btam-notes.md](docs/btam-notes.md).
+- **The DCB has no control-character table.** No `DEVD` value describes an
+  ordinary remote start-stop line — the three available are `BS` (bisync),
+  `WT` (World Trade Telegraph Adapter) and `LD` (locally attached). Only
+  `DEVD=BS` generates the 26-byte control-character table, and that holds
+  the BSC characters. It is possible this BTAM was genned without start-stop
+  terminal support at all.
 
-Add the 2702-compatibility commands to commadpt's CCW dispatch as no-ops,
-mirroring whatever the existing X'03' NOP case sets for `unitstat` and
-`residual`. Cover the whole documented group rather than only X'13' — that
-is the one BTAM issues at OPEN, but others in the family may appear
-elsewhere in the line handling and would fail identically.
-
-This is an emulation gap worth reporting upstream: commadpt rejects a
-command the device it emulates is documented to accept.
-
-**Not attempted here** — no Hercules build environment on this machine. So
-`ASYPOCB` is confirmed blocked at OPEN, and `BSCPOCB` is expected to fail
-the same way for the same reason, though it has not been run. Submitting
-`BSCPOCB` and looking for the same `sense CMDREJ` on X'13' would confirm it.
+If the X'13' does turn out to be the blocker, the fix is on the Hercules
+side: add the 2702-compatibility commands to commadpt's CCW dispatch as
+no-ops, mirroring the existing X'03' NOP case. Not attempted here — no
+Hercules build environment on this machine.
 
 ## The lines
 
@@ -250,5 +259,5 @@ original work and is covered by the licence.
 | `BSCPOC 980` | the Read returned only pad/SYN; usually an `rto=` timeout |
 | `BSCPOC 032` / `042` | partner answered, but not with ACK — the hex dump above shows what arrived |
 | `ASYPOC 900 RAW=` shows nothing like your text | translation; try `PARM.GO='N'` and compare |
-| BTAM program stops after `015 LINE GROUP IS OPEN` | the X'13' command reject — see above; nothing to fix in the program |
+| `ASYPOCB` stops after `015 LINE GROUP IS OPEN` | unresolved — see above. `BSCPOCB` on the BSC line does work |
 | Partner prints `expected X but got Y` | the two sides are out of step; restart both |
