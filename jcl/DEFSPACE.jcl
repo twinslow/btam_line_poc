@@ -1,0 +1,27 @@
+//TONYWSPC JOB (POC),'DEFINE VSAM SPACE',CLASS=A,MSGCLASS=X
+//*
+//* ------------------------------------------------------------------
+//*  GIVE THE VSAM CATALOG OWNERSHIP OF A VOLUME AND PUT A DATA SPACE
+//*  ON IT, SO THAT CLUSTERS CAN BE SUBALLOCATED FROM IT.
+//*
+//*  ONLY NEEDED IF jcl/VSAMCHK.jcl SHOWS NO USABLE OWNED VOLUME.
+//*
+//*  >>> SET THE VOLUME IN BOTH PLACES <<<  THE VOL=SER ON THE DDVOL
+//*  DD CARD AND THE VOLUMES() OPERAND MUST NAME THE SAME REAL, ONLINE
+//*  VOLUME.  DEFINE SPACE NEEDS THE DD CARD SO IT CAN GET AT THE
+//*  VOLUME, AND FILE() TIES THE TWO TOGETHER.
+//*
+//*  10 CYLINDERS IS FAR MORE THAN THIS CONTROL FILE NEEDS; IT JUST
+//*  AVOIDS HAVING TO COME BACK HERE.
+//* ------------------------------------------------------------------
+//DEFSPC  EXEC PGM=IDCAMS
+//SYSPRINT DD  SYSOUT=*
+//DDVOL    DD  UNIT=SYSDA,VOL=SER=TSO003,DISP=OLD
+//SYSIN    DD  *
+  DEFINE SPACE                                   -
+         (FILE(DDVOL)                            -
+          VOLUMES(TSO003)                        -
+          CYLINDERS(10))                         -
+         CAT('SYS1.UCAT.TSO')
+  LISTCAT SPACE ALL
+/*

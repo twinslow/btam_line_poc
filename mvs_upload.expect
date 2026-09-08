@@ -56,6 +56,7 @@ set ftp_port  "2121"
 set script_dir     [file dirname [file normalize [info script]]]
 set asm_dir        [file join $script_dir src]
 set jcl_dir        [file join $script_dir jcl]
+set proclib_dir    [file join $script_dir proclib]
 
 # Raw FTP client/server dialogue is written here (not echoed to the screen)
 # so it is available for diagnosis if a transfer fails.
@@ -72,6 +73,7 @@ set ftp_log        [file join $script_dir .mvs_upload_ftp.log]
 set upload_jobs [list \
     [list $asm_dir "*.asm" "/TONYW.BTAMPOC.ASM"] \
     [list $jcl_dir "*.jcl" "/TONYW.BTAMPOC.CNTL"] \
+    [list $proclib_dir "*.proc" "/TONYW.BTAMPOC.PROCLIB"] \
 ]
 
 # Seconds to wait for each FTP response before declaring a timeout

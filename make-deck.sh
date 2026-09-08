@@ -11,7 +11,8 @@ cat jcl/header.jcl  src/BSCPOC.asm  jcl/trailer.jcl  > jcl/BSCPOC.jcl
 cat jcl/headerb.jcl src/BSCPOCB.asm jcl/trailerb.jcl > jcl/BSCPOCB.jcl
 cat jcl/headera.jcl src/ASYPOC.asm  jcl/trailera.jcl > jcl/ASYPOC.jcl
 cat jcl/headerc.jcl src/ASYPOCB.asm jcl/trailerc.jcl > jcl/ASYPOCB.jcl
-for f in jcl/BSCPOC.jcl jcl/BSCPOCB.jcl jcl/ASYPOC.jcl jcl/ASYPOCB.jcl; do
+cat jcl/BSCFTCH.jcl src/BSCFTCH.asm  jcl/trailerf.jcl > jcl/BUILDFTC.jcl
+for f in jcl/BSCPOC.jcl jcl/BSCPOCB.jcl jcl/ASYPOC.jcl jcl/ASYPOCB.jcl jcl/BUILDFTC.jcl; do
     echo "built $f ($(wc -l < "$f") cards)"
     awk -v F="$f" 'length($0)>72 {print "WARNING "F" card "NR" exceeds column 72"}' "$f"
 done

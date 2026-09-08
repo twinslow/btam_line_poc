@@ -56,6 +56,8 @@ ACK1 = bytes([DLE, 0x61])
 WACK = bytes([DLE, 0x6B])
 RVI = bytes([DLE, 0x7C])
 
+POLL_SLICE = 0.5                   # keeps ctrl-C responsive, see _fill
+
 SYNC_BYTES = (SYN, LPAD, TPAD, 0x00)
 
 # Bytes that may legitimately start a frame.  Used to shake off the
@@ -111,17 +113,24 @@ class BscLine:
         self.sock.sendall(frame)
 
     def _fill(self, deadline):
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise BscTimeout("timed out waiting for the line")
-        self.sock.settimeout(remaining)
-        try:
-            chunk = self.sock.recv(4096)
-        except socket.timeout:
-            raise BscTimeout("timed out waiting for the line")
-        if not chunk:
-            raise BscError("the line was closed by the other end")
-        self.buf.extend(chunk)
+        """Wait for inbound bytes, in short slices so ctrl-C still works.
+
+        Python raises KeyboardInterrupt only between bytecodes, so one
+        long blocking recv swallows the interrupt until it expires.
+        """
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise BscTimeout("timed out waiting for the line")
+            self.sock.settimeout(min(POLL_SLICE, remaining))
+            try:
+                chunk = self.sock.recv(4096)
+            except socket.timeout:
+                continue
+            if not chunk:
+                raise BscError("the line was closed by the other end")
+            self.buf.extend(chunk)
+            return
 
     def _strip_sync(self):
         n = 0
