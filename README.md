@@ -51,6 +51,9 @@ entry is a placeholder that is never transmitted.
 `ASYPOCB` assembles clean and opens the line, but cannot transmit — see the
 next section.
 
+Built on top of these there is a working application — the **BSC file-fetch**
+started task and its Linux partner, described [below](#the-bsc-file-fetch-application).
+
 ## Why `ASYPOCB` does not work
 
 It assembles clean and OPEN succeeds, but the first `WRITE` never starts any
@@ -215,6 +218,117 @@ CR+LF outbound and `eol=0D iskip=0A` inbound are the proven pairing.
 The `PARM.GO=` switch is a diagnostic: `'Y'` (default) applies the tables,
 `'N'` passes bytes through untouched. Raw bytes are dumped under
 `ASYPOC 900 RAW=` before any translation either way.
+
+## The BSC file-fetch application
+
+Built on top of the POCs. An MVS started task reads a VSAM control file,
+fetches the named files from the Linux partner over the BSC line, and — once
+stage 3 is done — prints them to JES2. Full design in
+[docs/fetch-design.md](docs/fetch-design.md).
+
+### BSCFTCH — the started task
+
+- `S BSCFTCH` to start, `P BSCFTCH` to stop
+- Opens the BSC line at 0090 with BTAM (DD BSCLINE)
+- Sends `HEL`, expects `DAT00` back — that is the line test
+- Reads the VSAM KSDS control file (DD CTLFILE)
+- For each record with status `I`: sends `GET`, takes the `DAT` blocks until `EOF`
+- Marks the record `C` only when the whole file arrived
+- Console totals per cycle: `140` read, `142` complete, `144` with error
+- Failed records stay `I` and get retried next cycle
+- STOP is checked every second during the 15 second wait
+- Still to do (stage 3): DYNALLOC the temp dataset and SYSOUT, print to JES2.
+  Right now the lines are counted and thrown away
+
+Build with [jcl/BUILDFTC.jcl](jcl/BUILDFTC.jcl) and copy
+[proclib/BSCFTCH.proc](proclib/BSCFTCH.proc) into SYS1.PROCLIB. The control
+file comes from [jcl/DEFCTL.jcl](jcl/DEFCTL.jcl) — but the VSAM catalog has to
+own a volume first, see [jcl/VSAMCHK.jcl](jcl/VSAMCHK.jcl) and
+[jcl/DEFSPACE.jcl](jcl/DEFSPACE.jcl).
+
+### fetchpartner.py — the other end
+
+```bash
+python tools/fetchpartner.py --host 192.168.1.168 --port 3781 --listen 13781 --fdir ./files
+```
+
+- Runs on the Linux box, talks to commadpt over TCP
+- Dials out to lport **and** listens on rport at the same time — takes
+  whichever connects
+- Answers `HEL` with `DAT00Hello`
+- Answers `GET` by reading the file from `--fdir` — one `DAT` block per line,
+  then `EOF00`
+- `ERR04` file not there, `ERR16` name is not a plain filename, `ERR08`
+  command not recognised
+- EBCDIC on the wire, BSC framing, ACK0/ACK1 alternating, `ETB` until the
+  last block
+- Picks the line back up on its own when it drops
+- Lines longer than 133 characters get truncated (print width)
+- `--selftest` runs both ends against each other, no mainframe needed
+
+**Why both routes in at once:** commadpt places an *outgoing call* when BTAM
+issues the ENABLE at OPEN time, but BTAM does not always issue an ENABLE — so
+listening alone can wait for ever. And dialling in is refused while the line is
+not enabled, so dialling alone races the started task.
+
+## IOWAIT — why the task no longer hangs
+
+`TWAIT` is a thin BTAM wrapper over the ordinary MVS `WAIT`, and like `WAIT` it
+has **no timeout**. That matters because of a state this line gets into:
+
+- The ENABLE inside OPEN fails — commadpt tried an outgoing call, refused
+- ERP retries, issues a `halt I/O`, second ENABLE comes back `0D00`
+- OPEN sets `DCBOFLGS` anyway, so the task reports `024 LINE GROUP IS OPEN`
+- BTAM then accepts the `WRITE` and **never starts a channel program** — the
+  Hercules trace shows no CCW at all after the OPEN
+- Nothing will ever post that ECB. The task waits to the job wait limit and
+  only CANCEL gets it back
+
+`IOWAIT` is our own routine, not a macro. It waits on the operation ECB **and a
+timer ECB** together, using `STIMER REAL` with a small exit that posts the
+timer:
+
+- Timer wins → `940 BTAM NEVER POSTED`, abandon the cycle, close the line, nap,
+  start fresh
+- The next cycle works normally once the partner is back — no operator needed
+
+Two limits, because they are different kinds of wait:
+
+| Entry | Limit | Used for |
+| --- | --- | --- |
+| `IOWAITS` | 5s | bids — quick on a healthy line, so a dead line is found fast |
+| `IOWAIT` | 30s | receives — the partner has to open a file and start sending |
+
+The timer exit runs under an **IRB** (Interruption Request Block), queued on
+the TCB ahead of the program's PRB. It does not inherit the program's base
+registers, so it builds its own from R15.
+
+## The LERB does not show a failed line open
+
+Worth recording so nobody tries it again. OPEN reports success even when the
+ENABLE inside it failed, so the obvious question is whether the LERB — the one
+place BTAM records line errors — can be tested instead. It cannot.
+
+Two consecutive cycles logged **byte-for-byte identical** LERBs at OPEN time,
+one of which then failed and one of which succeeded:
+
+```
+12.59.04  024 LINE GROUP IS OPEN      <- failed, 940 five seconds later
+          HEX=0000000000000000000009000900000000000000000000
+12.59.25  024 LINE GROUP IS OPEN      <- succeeded
+          HEX=0000000000000000000009000900000000000000000000
+```
+
+The reason shows in the rest of the log — byte 10 went `09 -> 09 -> 0D -> 11`,
+up by four on each *successful* cycle, matching the four BTAM operations a good
+cycle performs. These are **cumulative counters**, the same family as
+`TRANS/DC/IR/TO` in the `IEC801I` messages, and read at OPEN they describe the
+*previous* cycle, not the one about to run.
+
+So the bid timeout is the detection mechanism. All that is left of the LERB
+diagnostic is `CHKLERB`, silent unless BTAM has written past the 64 bytes we
+gave it — the length was a guess, so there is a `*LERBEND*` fence behind it.
+Observed usage is about 13 bytes.
 
 ## Utility decks
 
